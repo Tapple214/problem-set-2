@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'techJokes',  # Q1–Q5: Tech Jokes web application
 ]
 
 MIDDLEWARE = [
@@ -71,6 +72,7 @@ WSGI_APPLICATION = 'problemSet2.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# Use PostgreSQL for deployment (required for Q3 Extra2 full-text search, Q5, Q6–Q12).
 
 DATABASES = {
     'default': {

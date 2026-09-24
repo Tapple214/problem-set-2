@@ -19,4 +19,8 @@ from django.urls import path
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Problem Set 2 index and tech-jokes app (Q1–Q5)
+    # path('ps2/', views.ps2_index, name='ps2_index'),
+    # path('ps2/jokes/', include('techJokes.urls')),  # requires: from django.urls import include
 ]

@@ -1,3 +1,3 @@
 from django.contrib import admin
 
-# Register your models here.
+# Register the Joke model here after Q1 model is defined.
