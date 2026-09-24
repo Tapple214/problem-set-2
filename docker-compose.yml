@@ -4,7 +4,7 @@ services:
   db:
     image: postgres:17
     environment:
-      POSTGRES_DB: studentdb
+      POSTGRES_DB: problemset2
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -23,7 +23,7 @@ services:
     depends_on:
       - db
     environment:
-      DB_NAME: studentdb
+      DB_NAME: problemset2
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_HOST: db
