@@ -1,0 +1,110 @@
+[
+  {
+    "model": "techJokes.joke",
+    "pk": 1,
+    "fields": {
+      "text": "There are 10 types of people in the world: those who understand binary and those who don't.",
+      "author": "Anonymous",
+      "category": "Programming"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 2,
+    "fields": {
+      "text": "Why do programmers prefer dark mode? Because light attracts bugs.",
+      "author": "Anonymous",
+      "category": "Programming"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 3,
+    "fields": {
+      "text": "I told my computer I needed a break, and it said: 'No problem, I'll go to sleep.'",
+      "author": "Not a Random Guy",
+      "category": "AI"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 4,
+    "fields": {
+      "text": "A SQL query walks into a bar, walks up to two tables, and asks: 'Can I join you?'",
+      "author": "Anonymous",
+      "category": "Programming"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 5,
+    "fields": {
+      "text": "Hardware: the part of the computer you can kick.",
+      "author": "Anonymous",
+      "category": "Hardware"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 6,
+    "fields": {
+      "text": "Software: the part you can only swear at.",
+      "author": "Anonymous",
+      "category": "Hardware"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 7,
+    "fields": {
+      "text": "The best thing about a boolean is even if you are wrong, you are only off by a bit.",
+      "author": "Anonymous",
+      "category": "Programming"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 8,
+    "fields": {
+      "text": "AI is just statistics in a trench coat.",
+      "author": "Anonymous",
+      "category": "AI"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 9,
+    "fields": {
+      "text": "To err is human, to really foul things up you need a computer.",
+      "author": "Anonymous",
+      "category": ""
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 10,
+    "fields": {
+      "text": "There is no cloud. It's just someone else's computer.",
+      "author": "Anonymous",
+      "category": "Hardware"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 11,
+    "fields": {
+      "text": "Machine learning is just fancy curve fitting.",
+      "author": "Anonymous",
+      "category": "AI"
+    }
+  },
+  {
+    "model": "techJokes.joke",
+    "pk": 12,
+    "fields": {
+      "text": "I would love to change the world, but they won't give me the source code.",
+      "author": "Anonymous",
+      "category": ""
+    }
+  }
+]

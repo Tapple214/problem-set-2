@@ -1,55 +1,205 @@
-from django.shortcuts import render
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+from itertools import groupby
+
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db import IntegrityError, connection
+from django.db.models import Q
+from django.conf import settings
+from django.http import FileResponse, HttpResponse, JsonResponse
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
+
+from .forms import ImportJokesForm, JokeForm
+from .models import Joke
+
+HIDDEN_JOKES_COOKIE = 'hidden_jokes'
+JOKES_PER_PAGE = 5
 
 
-# =============================================================================
-# Q1: Web-Enabled Tech Jokes Database
-# - Display all jokes grouped by category (text + author).
-# - Add-joke form with validation for empty/whitespace fields.
-# - Keyword search (case-insensitive) matching joke text OR author.
-# Bonus (+0.5): Pagination on the joke list (enough seed data for 2+ pages).
-# =============================================================================
+def get_hidden_joke_ids(request):
+    raw = request.COOKIES.get(HIDDEN_JOKES_COOKIE, '')
+    if not raw:
+        return []
+    return [int(value) for value in raw.split(',') if value.isdigit()]
 
 
-# =============================================================================
-# Q2: Joke Category
-# - Existing categories in a select box (distinct DB values).
-# - Separate "New category" text box; use new value if entered, else selected.
-# - Validation error if both existing and new category are supplied.
-# =============================================================================
+def group_jokes_by_category(jokes):
+    sorted_jokes = sorted(jokes, key=lambda joke: (joke.display_category, joke.text))
+    return [
+        (category, list(group))
+        for category, group in groupby(sorted_jokes, key=lambda joke: joke.display_category)
+    ]
 
 
-# =============================================================================
-# Q3: Search and Per-Browser Personalization (4 pts + bonus)
-# Basic search (4 pts):
-#   - Case-insensitive match on joke text or author.
-#   - Empty search box shows all jokes, still grouped by category.
-# Extra1 (+1.5 pts): Per-browser personalization via cookies
-#   - Hide jokes per browser; persist after close; exclude in DB query (exclude/__in).
-#   - "Erase my personalization" link only when at least one joke is hidden.
-# Extra2 (+1.5 pts): PostgreSQL full-text search
-#   - Search text + author; rank by relevance; show most relevant first.
-#   - Demonstrate at least one query that differs from basic Q3 search.
-# =============================================================================
+def filter_jokes(request, search_term, search_mode):
+    queryset = Joke.objects.all()
+    hidden_ids = get_hidden_joke_ids(request)
+    if hidden_ids:
+        queryset = queryset.exclude(id__in=hidden_ids)
+
+    term = search_term.strip()
+    if not term:
+        return queryset.order_by('category', 'text')
+
+    if search_mode == 'fts' and connection.vendor == 'postgresql':
+        from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+
+        vector = SearchVector('text', 'author')
+        query = SearchQuery(term)
+        return (
+            queryset.annotate(rank=SearchRank(vector, query))
+            .filter(rank__gt=0)
+            .order_by('-rank')
+        )
+
+    return queryset.filter(
+        Q(text__icontains=term) | Q(author__icontains=term)
+    ).order_by('category', 'text')
 
 
-# =============================================================================
-# Q4: Export Jokes in JSON and XML (4 pts)
-# Separate URLs, e.g. /jokes/export/json/ and /jokes/export/xml/
-# Each joke includes: id, text, author, category (from current DB contents).
-# =============================================================================
+def joke_index(request):
+    search_term = request.GET.get('q', '')
+    search_mode = request.GET.get('mode', 'basic')
+    add_form = JokeForm()
+
+    if request.method == 'POST' and 'add_joke' in request.POST:
+        add_form = JokeForm(request.POST)
+        if add_form.is_valid():
+            try:
+                add_form.save()
+                messages.success(request, 'Joke added.')
+                return redirect('techJokes:index')
+            except IntegrityError:
+                add_form.add_error(
+                    None,
+                    'This joke already exists with the same text, author, and category.',
+                )
+
+    jokes = filter_jokes(request, search_term, search_mode)
+    paginator = Paginator(jokes, JOKES_PER_PAGE)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    if search_mode == 'fts' and search_term.strip() and connection.vendor == 'postgresql':
+        grouped_jokes = [(None, list(page_obj.object_list))]
+    else:
+        grouped_jokes = group_jokes_by_category(page_obj.object_list)
+
+    hidden_ids = get_hidden_joke_ids(request)
+    context = {
+        'add_form': add_form,
+        'grouped_jokes': grouped_jokes,
+        'page_obj': page_obj,
+        'search_term': search_term,
+        'search_mode': search_mode,
+        'has_hidden_jokes': bool(hidden_ids),
+        'fts_available': connection.vendor == 'postgresql',
+    }
+    return render(request, 'techJokes/joke_index.html', context)
 
 
-# =============================================================================
-# Q5: Import Jokes from Another Server (4 pts + bonus)
-# - Fetch XML from remote export URL; parse; insert with new local IDs.
-# - Skip exact duplicates already in the local database.
-# - Show clear errors if remote server unreachable or XML invalid.
-# Extra1 (+1 pt): Secure Remote Import (see forms.py).
-# Extra2 (+1 pt): DB constraint for duplicates (see models.py).
-# =============================================================================
+@require_POST
+def hide_joke(request, joke_id):
+    hidden_ids = get_hidden_joke_ids(request)
+    if joke_id not in hidden_ids:
+        hidden_ids.append(joke_id)
+
+    response = redirect(request.POST.get('next') or 'techJokes:index')
+    response.set_cookie(
+        HIDDEN_JOKES_COOKIE,
+        ','.join(str(joke_id) for joke_id in hidden_ids),
+        max_age=365 * 24 * 60 * 60,
+    )
+    return response
 
 
-# =============================================================================
-# Problem Set 2 index page (/ps2/)
-# Link to joke features, SQL transcript (Q6–Q12), and any bonus demos.
-# =============================================================================
+@require_POST
+def reset_personalization(request):
+    response = redirect('techJokes:index')
+    response.delete_cookie(HIDDEN_JOKES_COOKIE)
+    messages.success(request, 'Personalization erased.')
+    return response
+
+def export_json(request):
+    jokes = [
+        {
+            'id': joke.id,
+            'text': joke.text,
+            'author': joke.author,
+            'category': joke.category,
+        }
+        for joke in Joke.objects.all().order_by('id')
+    ]
+    return JsonResponse(jokes, safe=False)
+
+
+def export_xml(request):
+    root = ET.Element('jokes')
+    for joke in Joke.objects.all().order_by('id'):
+        joke_element = ET.SubElement(root, 'joke')
+        ET.SubElement(joke_element, 'id').text = str(joke.id)
+        ET.SubElement(joke_element, 'text').text = joke.text
+        ET.SubElement(joke_element, 'author').text = joke.author
+        ET.SubElement(joke_element, 'category').text = joke.category
+
+    xml_bytes = ET.tostring(root, encoding='utf-8', xml_declaration=True)
+    return HttpResponse(xml_bytes, content_type='application/xml')
+
+
+def import_jokes(request):
+    form = ImportJokesForm()
+
+    if request.method == 'POST':
+        form = ImportJokesForm(request.POST)
+        if form.is_valid():
+            url = form.cleaned_data['xml_url']
+            try:
+                request_obj = urllib.request.Request(
+                    url,
+                    headers={'User-Agent': 'techJokes-importer'},
+                )
+                with urllib.request.urlopen(request_obj, timeout=10) as response:
+                    xml_data = response.read()
+            except (urllib.error.URLError, TimeoutError) as exc:
+                messages.error(request, f'Could not reach remote server: {exc}')
+            else:
+                try:
+                    root = ET.fromstring(xml_data)
+                except ET.ParseError:
+                    messages.error(request, 'Invalid XML received from remote server.')
+                else:
+                    imported_count = 0
+                    skipped_count = 0
+                    for joke_element in root.findall('joke'):
+                        text = (joke_element.findtext('text') or '').strip()
+                        author = (joke_element.findtext('author') or '').strip()
+                        category = (joke_element.findtext('category') or '').strip()
+                        if not text or not author:
+                            continue
+                        try:
+                            Joke.objects.create(
+                                text=text,
+                                author=author,
+                                category=category,
+                            )
+                            imported_count += 1
+                        except IntegrityError:
+                            skipped_count += 1
+
+                    messages.success(
+                        request,
+                        f'Imported {imported_count} joke(s). Skipped {skipped_count} duplicate(s).',
+                    )
+                    return redirect('techJokes:import')
+
+    return render(request, 'techJokes/import_jokes.html', {'form': form})
+
+def ps2_index(request):
+    return render(request, 'techJokes/ps2_index.html')
+
+
+def sql_transcript(request):
+    transcript_path = settings.BASE_DIR.parent / 'sql' / 'ps2_sql_transcript.sql'
+    return FileResponse(transcript_path.open('rb'), content_type='text/plain')

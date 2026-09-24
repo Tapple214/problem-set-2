@@ -1,60 +1,178 @@
--- Problem Set 2 — PostgreSQL Session Transcript
--- Link this file once from the main /ps2/ index page.
--- Keep commands and outputs together; label each section by question number.
+CREATE TABLE my_stocks (
+    symbol VARCHAR(20) NOT NULL,
+    n_shares INTEGER NOT NULL,
+    date_acquired DATE NOT NULL
+);
 
+\copy my_stocks FROM 'my_stocks.txt' WITH (FORMAT text);
 
--- =============================================================================
--- Q6: Load Stock Data from a Text File into PostgreSQL (5 pts)
--- 1. Create plain-text file (tab-separated): symbol, n_shares, date_acquired
--- 2. CREATE TABLE my_stocks (...)
--- 3. Load with \copy (from psql) or COPY
--- 4. SELECT * FROM my_stocks;
--- =============================================================================
+SELECT * FROM my_stocks;
 
+CREATE TABLE stock_prices AS
+SELECT DISTINCT
+    symbol,
+    CURRENT_DATE AS quote_date,
+    31.415 AS price
+FROM my_stocks;
 
--- =============================================================================
--- Q7: Copy Data Between Tables Using SQL (5 pts)
--- Part A — CREATE TABLE stock_prices AS / INSERT ... SELECT distinct symbols
---          from my_stocks with quote_date = CURRENT_DATE, price = 31.415
--- Part B — CREATE TABLE newly_acquired_stocks; INSERT ... SELECT 2–3 rows
---          from my_stocks using a WHERE on date_acquired
--- =============================================================================
+SELECT * FROM stock_prices;
 
+-- Expected output:
+--  symbol | quote_date |  price
+-- --------+------------+---------
+--  AAPL   | 2026-09-24 | 31.415
+--  GOOG   | 2026-09-24 | 31.415
+--  META   | 2026-09-24 | 31.415
+--  MSFT   | 2026-09-24 | 31.415
+--  NVDA   | 2026-09-24 | 31.415
 
--- =============================================================================
--- Q8: JOIN my_stocks and stock_prices (4 pts)
--- Single query: symbol, n_shares, price per share, current value (n_shares * price)
--- =============================================================================
+-- Part B
+CREATE TABLE newly_acquired_stocks (
+    symbol VARCHAR(20) NOT NULL,
+    n_shares INTEGER NOT NULL,
+    date_acquired DATE NOT NULL
+);
 
+INSERT INTO newly_acquired_stocks (symbol, n_shares, date_acquired)
+SELECT symbol, n_shares, date_acquired
+FROM my_stocks
+WHERE date_acquired >= DATE '2026-04-01';
 
--- =============================================================================
--- Q9: OUTER JOIN and Missing Price Data (4 pts)
--- INSERT a symbol into my_stocks that is not in stock_prices (e.g. 'AIT').
--- Rerun Q8 JOIN — notice missing row.
--- Rewrite with LEFT OUTER JOIN so all my_stocks rows appear; NULL price/value
--- when no matching stock_prices row.
--- =============================================================================
+SELECT * FROM newly_acquired_stocks;
 
+-- Expected output:
+--  symbol | n_shares | date_acquired
+-- --------+----------+---------------
+--  NVDA   |        8 | 2026-04-12
+--  META   |       12 | 2026-05-05
 
--- =============================================================================
--- Q10: PL/pgSQL Functions and Portfolio Valuation (7 pts)
--- Part A — stock_value(symbol): sum of ASCII values of symbol characters;
---          UPDATE stock_prices SET price = stock_value(symbol);
--- Part B — portfolio_value(): cursor/FOR loop over join; sum n_shares * price
--- =============================================================================
+SELECT
+    ms.symbol,
+    ms.n_shares,
+    sp.price AS price_per_share,
+    ms.n_shares * sp.price AS current_value
+FROM my_stocks ms
+JOIN stock_prices sp ON ms.symbol = sp.symbol;
 
+-- Expected output:
+--  symbol | n_shares | price_per_share | current_value
+-- --------+----------+-----------------+---------------
+--  AAPL   |       10 |          31.415 |       314.150
+--  MSFT   |       20 |          31.415 |       628.300
+--  GOOG   |        5 |          31.415 |       157.075
+--  NVDA   |        8 |          31.415 |       251.320
+--  META   |       12 |          31.415 |       376.980
 
--- =============================================================================
--- Q11: Buy More of the Winners (7 pts)
--- INSERT ... SELECT additional shares for stocks priced above portfolio average.
--- Report A: total shares per symbol (GROUP BY)
--- Report B: total value per symbol (JOIN + GROUP BY)
--- Report C: winners only — symbols with >= 2 purchase blocks (GROUP BY ... HAVING)
--- =============================================================================
+INSERT INTO my_stocks (symbol, n_shares, date_acquired)
+VALUES ('AIT', 10, CURRENT_DATE);
 
+SELECT
+    ms.symbol,
+    ms.n_shares,
+    sp.price AS price_per_share,
+    ms.n_shares * sp.price AS current_value
+FROM my_stocks ms
+LEFT OUTER JOIN stock_prices sp ON ms.symbol = sp.symbol;
 
--- =============================================================================
--- Q12: Encapsulate the Final Query in a View (3 pts)
--- CREATE VIEW stocks_i_like AS ... (Q11 part C logic)
--- SELECT * FROM stocks_i_like;
--- =============================================================================
+-- Expected output includes AIT with NULL price and current_value:
+--  symbol | n_shares | price_per_share | current_value
+-- --------+----------+-----------------+---------------
+--  AAPL   |       10 |          31.415 |       314.150
+--  MSFT   |       20 |          31.415 |       628.300
+--  GOOG   |        5 |          31.415 |       157.075
+--  NVDA   |        8 |          31.415 |       251.320
+--  META   |       12 |          31.415 |       376.980
+--  AIT    |       10 |                 |
+-- (5 rows)
+
+CREATE OR REPLACE FUNCTION stock_value(p_symbol VARCHAR)
+RETURNS INTEGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    total INTEGER := 0;
+    i INTEGER;
+BEGIN
+    FOR i IN 1..length(p_symbol) LOOP
+        total := total + ascii(substring(p_symbol FROM i FOR 1));
+    END LOOP;
+    RETURN total;
+END;
+$$;
+
+SELECT stock_value('IBM');
+-- Expected: 216
+
+UPDATE stock_prices
+SET price = stock_value(symbol);
+
+SELECT * FROM stock_prices;
+
+CREATE OR REPLACE FUNCTION portfolio_value()
+RETURNS NUMERIC
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    total NUMERIC := 0;
+    row RECORD;
+BEGIN
+    FOR row IN
+        SELECT ms.n_shares, sp.price
+        FROM my_stocks ms
+        JOIN stock_prices sp ON ms.symbol = sp.symbol
+    LOOP
+        total := total + (row.n_shares * row.price);
+    END LOOP;
+    RETURN total;
+END;
+$$;
+
+SELECT portfolio_value();
+
+INSERT INTO my_stocks (symbol, n_shares, date_acquired)
+SELECT ms.symbol, ms.n_shares, CURRENT_DATE
+FROM my_stocks ms
+JOIN stock_prices sp ON ms.symbol = sp.symbol
+WHERE sp.price > (
+    SELECT AVG(price) FROM stock_prices
+);
+
+-- Report A
+SELECT symbol, SUM(n_shares) AS total_shares
+FROM my_stocks
+GROUP BY symbol
+ORDER BY symbol;
+
+-- Report B
+SELECT
+    ms.symbol,
+    SUM(ms.n_shares) AS total_shares,
+    sp.price AS price_per_share,
+    SUM(ms.n_shares) * sp.price AS total_current_value
+FROM my_stocks ms
+JOIN stock_prices sp ON ms.symbol = sp.symbol
+GROUP BY ms.symbol, sp.price
+ORDER BY ms.symbol;
+
+-- Report C
+SELECT
+    ms.symbol,
+    SUM(ms.n_shares) AS total_shares,
+    SUM(ms.n_shares) * sp.price AS total_current_value
+FROM my_stocks ms
+JOIN stock_prices sp ON ms.symbol = sp.symbol
+GROUP BY ms.symbol, sp.price
+HAVING COUNT(*) >= 2
+ORDER BY ms.symbol;
+
+CREATE VIEW stocks_i_like AS
+SELECT
+    ms.symbol,
+    SUM(ms.n_shares) AS total_shares,
+    SUM(ms.n_shares) * sp.price AS total_current_value
+FROM my_stocks ms
+JOIN stock_prices sp ON ms.symbol = sp.symbol
+GROUP BY ms.symbol, sp.price
+HAVING COUNT(*) >= 2;
+
+SELECT * FROM stocks_i_like;

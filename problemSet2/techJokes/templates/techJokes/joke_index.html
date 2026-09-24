@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Tech Jokes</title>
+</head>
+<body>
+    <h1>Tech Jokes</h1>
+    <p><a href="{% url 'techJokes:ps2_index' %}">Back to Problem Set 2 index</a></p>
+
+    {% if messages %}
+        <ul>
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <h2>Search</h2>
+    <form method="get">
+        <label for="q">Search:</label>
+        <input type="text" id="q" name="q" value="{{ search_term }}">
+        <label for="mode">Mode:</label>
+        <select id="mode" name="mode">
+            <option value="basic"{% if search_mode == 'basic' %} selected{% endif %}>Basic (Q3)</option>
+            {% if fts_available %}
+                <option value="fts"{% if search_mode == 'fts' %} selected{% endif %}>Full-text (Q3 Extra2)</option>
+            {% endif %}
+        </select>
+        <button type="submit">Search</button>
+    </form>
+
+    {% if fts_available and search_mode == 'fts' %}
+        <p>
+            Full-text search ranks matches by relevance and may return different results
+            than basic search. For example, searching for a common word can rank jokes
+            where the word appears more often in the text higher than basic
+            substring matches grouped only by category.
+        </p>
+    {% endif %}
+
+    {% if has_hidden_jokes %}
+        <form method="post" action="{% url 'techJokes:reset_personalization' %}">
+            {% csrf_token %}
+            <button type="submit">Erase my personalization</button>
+        </form>
+    {% endif %}
+
+    <h2>Add Joke</h2>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="add_joke" value="1">
+        {{ add_form.as_p }}
+        <button type="submit">Add joke</button>
+    </form>
+
+    <h2>Jokes</h2>
+    {% if search_mode == 'fts' and search_term %}
+        {% for category, jokes in grouped_jokes %}
+            <ul>
+                {% for joke in jokes %}
+                    <li>
+                        {{ joke.text }} — {{ joke.author }}
+                        <form method="post" action="{% url 'techJokes:hide_joke' joke.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit">Hide</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% empty %}
+            <p>No jokes found.</p>
+        {% endfor %}
+    {% else %}
+        {% for category, jokes in grouped_jokes %}
+            <h3>{{ category }}</h3>
+            <ul>
+                {% for joke in jokes %}
+                    <li>
+                        {{ joke.text }} — {{ joke.author }}
+                        <form method="post" action="{% url 'techJokes:hide_joke' joke.id %}" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit">Hide</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% empty %}
+            <p>No jokes found.</p>
+        {% endfor %}
+    {% endif %}
+
+    {% if page_obj.paginator.num_pages > 1 %}
+        <p>
+            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            {% if page_obj.has_previous %}
+                <a href="?q={{ search_term|urlencode }}&mode={{ search_mode }}&page={{ page_obj.previous_page_number }}">Previous</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+                <a href="?q={{ search_term|urlencode }}&mode={{ search_mode }}&page={{ page_obj.next_page_number }}">Next</a>
+            {% endif %}
+        </p>
+    {% endif %}
+</body>
+</html>

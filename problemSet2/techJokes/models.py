@@ -1,24 +1,61 @@
 from django.db import models
 
 
-# =============================================================================
-# Q1: Web-Enabled Tech Jokes Database
-# Store joke text, author/comedian, and an optional category.
-# Jokes without a category should display under "Uncategorized".
-# Bonus (+0.5): Django adds an implicit `id` primary key via DEFAULT_AUTO_FIELD
-#   (BigAutoField); PostgreSQL stores it as BIGSERIAL and auto-increments it.
-# =============================================================================
+class Joke(models.Model):
+    text = models.TextField()
+    author = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['text', 'author', 'category'],
+                name='unique_joke_text_author_category',
+            ),
+        ]
+
+    @property
+    def display_category(self):
+        return self.category.strip() or 'Uncategorized'
+
+    def __str__(self):
+        return f'{self.text[:50]} — {self.author}'
 
 
-# =============================================================================
-# Q2: Joke Category (form behavior lives in forms.py / views.py)
-# Existing categories come from distinct DB values; user may pick one OR enter
-# a new category, but not both at once.
-# =============================================================================
+# Q6: my_stocks
+class MyStock(models.Model):
+    symbol = models.CharField(max_length=20)
+    n_shares = models.IntegerField()
+    date_acquired = models.DateField()
+
+    class Meta:
+        db_table = 'my_stocks'
+
+    def __str__(self):
+        return f'{self.symbol} ({self.n_shares} shares)'
 
 
-# =============================================================================
-# Q5 Extra2 (+1 pt): Database-Level Duplicate Protection
-# Enforce uniqueness on (joke text, author, category) with a DB constraint,
-# not Python-only checks. Handle duplicate attempts gracefully in views/forms.
-# =============================================================================
+# Q7 Part A: stock_prices
+class StockPrice(models.Model):
+    symbol = models.CharField(max_length=20, primary_key=True)
+    quote_date = models.DateField()
+    price = models.DecimalField(max_digits=10, decimal_places=3)
+
+    class Meta:
+        db_table = 'stock_prices'
+
+    def __str__(self):
+        return f'{self.symbol} @ {self.price}'
+
+
+# Q7 Part B: newly_acquired_stocks
+class NewlyAcquiredStock(models.Model):
+    symbol = models.CharField(max_length=20)
+    n_shares = models.IntegerField()
+    date_acquired = models.DateField()
+
+    class Meta:
+        db_table = 'newly_acquired_stocks'
+
+    def __str__(self):
+        return f'{self.symbol} ({self.n_shares} shares)'

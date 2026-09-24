@@ -1,3 +1,8 @@
 from django.contrib import admin
 
-# Register the Joke model here after Q1 model is defined.
+from .models import Joke, MyStock, NewlyAcquiredStock, StockPrice
+
+admin.site.register(Joke)
+admin.site.register(MyStock)
+admin.site.register(StockPrice)
+admin.site.register(NewlyAcquiredStock)

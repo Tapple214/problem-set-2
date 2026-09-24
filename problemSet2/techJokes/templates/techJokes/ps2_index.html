@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Problem Set 2</title>
+</head>
+<body>
+    <h1>Problem Set 2</h1>
+    <ul>
+        <li><a href="{% url 'techJokes:index' %}">Tech Jokes (Q1–Q3)</a></li>
+        <li><a href="{% url 'techJokes:export_json' %}">Export JSON (Q4)</a></li>
+        <li><a href="{% url 'techJokes:export_xml' %}">Export XML (Q4)</a></li>
+        <li><a href="{% url 'techJokes:import' %}">Import Jokes (Q5)</a></li>
+        <li><a href="{% url 'techJokes:sql_transcript' %}">SQL Transcript (Q6–Q12)</a></li>
+    </ul>
+    <p>
+        Q1 bonus: Django creates an implicit <code>id</code> primary key using
+        <code>DEFAULT_AUTO_FIELD</code> (BigAutoField). PostgreSQL stores this as
+        <code>BIGSERIAL</code> and auto-increments each new row.
+    </p>
+</body>
+</html>
